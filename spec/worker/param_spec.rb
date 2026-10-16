@@ -1,45 +1,24 @@
 # frozen_string_literal: true
 
 RSpec.describe Sidekiq::Enqueuer::Worker::Param do
-  describe "#initializer" do
-    context "with required param" do
-      subject(:param) { described_class.new("userId", :req) }
+  it "describes positional params" do
+    required = described_class.new(:a, :req)
+    optional = described_class.new(:b, :opt)
 
-      it "expects a correct name assignment" do
-        expect(param.name).to eq("userId")
-      end
-
-      it { expect(param.required?).to be_truthy }
-      it { expect(param.optional?).to be_falsey }
-    end
-
-    context "with optional param" do
-      subject(:param) { described_class.new("userId", :opt) }
-
-      it "expects a correct name assignment" do
-        expect(param.name).to eq("userId")
-      end
-
-      it { expect(param.required?).to be_falsey }
-      it { expect(param.optional?).to be_truthy }
-    end
+    expect([required.label, required.required?, required.keyword?]).to eq(["required", true, false])
+    expect([optional.label, optional.optional?, optional.keyword?]).to eq(["optional", true, false])
   end
 
-  describe "#label" do
-    context "with a required condition" do
-      subject(:param) { described_class.new("userId", :req) }
+  it "describes keyword params" do
+    required = described_class.new(:a, :keyreq)
+    optional = described_class.new(:b, :key)
 
-      it "expects a correct name assignment" do
-        expect(param.label).to eq("required")
-      end
-    end
+    expect([required.label, required.required?, required.keyword?]).to eq(["required keyword", true, true])
+    expect([optional.label, optional.required?, optional.keyword?]).to eq(["optional keyword", false, true])
+  end
 
-    context "with an optional condition" do
-      subject(:param) { described_class.new("userId", :opt) }
-
-      it "expects a correct name assignment" do
-        expect(param.label).to eq("optional")
-      end
-    end
+  it "flags splats as unsupported" do
+    expect(described_class.new(:args, :rest)).not_to be_supported
+    expect(described_class.new(:a, :req)).to be_supported
   end
 end

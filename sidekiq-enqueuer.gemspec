@@ -6,11 +6,11 @@ require "sidekiq/enqueuer/version"
 Gem::Specification.new do |spec|
   spec.name = "sidekiq-enqueuer"
   spec.version = Sidekiq::Enqueuer::VERSION
-  spec.required_ruby_version = ">= 2.4"
+  spec.required_ruby_version = ">= 3.2"
 
   spec.authors = %w[richfisher basherru]
   spec.email = %w[richfisher.pan@gmail.com basherru@umbrellio.biz]
-  spec.homepage = "https://github.com/umbrellio/sidekiq-enqueuer"
+  spec.homepage = "https://github.com/gschammah/sidekiq-enqueuer"
   spec.licenses = ["MIT"]
 
   spec.summary = <<-SUMMARY
@@ -18,23 +18,21 @@ Gem::Specification.new do |spec|
   SUMMARY
   spec.description = <<-DESCRIPTION
     A Sidekiq Web extension to enqueue/schedule jobs with custom perform params in Web UI.
-    Support both Sidekiq::Worker and ActiveJob.
+    Support both Sidekiq::Job and ActiveJob. Fork of umbrellio/sidekiq-enqueuer for Sidekiq 8.
   DESCRIPTION
 
   spec.files = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "sidekiq", ">= 8.0", "< 9"
+
+  spec.add_development_dependency "activejob", ">= 7.0"
   spec.add_development_dependency "bundler"
-  spec.add_development_dependency "minitest"
-  spec.add_development_dependency "pry"
+  spec.add_development_dependency "rack-session"
   spec.add_development_dependency "rack-test"
-  spec.add_development_dependency "rails", "> 4.2"
   spec.add_development_dependency "rake"
   spec.add_development_dependency "rspec"
-  spec.add_development_dependency "rubocop-config-umbrellio"
-  spec.add_development_dependency "sidekiq"
   spec.add_development_dependency "simplecov"
   spec.add_development_dependency "simplecov-lcov"
-  spec.add_development_dependency "sinatra"
   spec.add_development_dependency "timecop"
 end

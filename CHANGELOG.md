@@ -1,4 +1,16 @@
 # Sidekiq Enqueuer Changes
+3.0.0
+-----------
+
+- Requires Sidekiq 8 (8.0 and 8.1) and Ruby 3.2+. The Web tab registers through `Sidekiq::Web.configure`.
+- Keyword parameters are passed as kwargs to ActiveJob. Sidekiq jobs with keyword parameters, splats or blocks are refused with a message.
+- Form values are typed: `true`/`false`, `nil`, integers, floats and JSON. Quoted text stays a String. Blank fields are left out so method defaults apply.
+- Missing required params, invalid JSON and a blank or non-positive delay re-render the form with an error and keep the input.
+- Unknown jobs return 404.
+- A flash confirms the enqueued args and jid, or says the job was not enqueued (for example a unique job that is already queued).
+- Auto-detected jobs skip anonymous classes instead of failing to sort.
+- Views restyled for Sidekiq 8, which dropped Bootstrap.
+
 2.2.1
 -----------
 

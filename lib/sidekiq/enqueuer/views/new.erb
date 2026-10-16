@@ -1,40 +1,61 @@
-<h3>Enqueuer</h3>
-<form method="post" action="<%= root_path %>enqueuer">
-  <%= csrf_tag if respond_to?(:csrf_tag) %>
+<style nonce="<%= csp_nonce %>">
+  .enqueuer-form { max-width: 720px; }
+  .enqueuer-form .field { display: flex; flex-direction: column; gap: var(--space-1-2); margin-bottom: var(--space-2x); }
+  .enqueuer-form .field .form-control { width: 100%; box-sizing: border-box; height: auto; padding: var(--space) var(--space); }
+  .enqueuer-form .field-kind { color: var(--color-primary); font-size: var(--font-size-small); margin-left: var(--space); }
+  .enqueuer-form .hint { color: var(--color-text-light); font-size: var(--font-size-small); margin: 0 0 var(--space-2x); }
+  .enqueuer-form .hint code { font-family: var(--font-mono); }
+  .enqueuer-form .error { background: var(--color-danger); padding: var(--space-2x); margin-bottom: var(--space-2x); border-radius: var(--space-1-2); }
+  .enqueuer-form .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2x); margin-top: var(--space-3x); padding-top: var(--space-2x); border-top: 1px solid var(--color-border); }
+  .enqueuer-form .schedule { display: flex; align-items: flex-end; gap: var(--space); }
+  .enqueuer-form .schedule .field { margin-bottom: 0; }
+  .enqueuer-form .schedule .form-control { width: 140px; }
+</style>
 
-  <div class="panel panel-default">
-    <div class="panel-heading">
-      <h3 class="panel-title">Perform</h3>
-    </div>
-    <div class="panel-body">
-      <div class="form-group">
-        <label for="job_class_name">Job Class/Module</label>
-        <input class="form-control" name="job_class_name" value="<%= @job.name %>" readonly=readonly />
+<section class="enqueuer-form">
+  <header>
+    <h1>Enqueue <%= h @job.name %></h1>
+  </header>
+
+  <% if @error %>
+    <p class="error"><%= h @error %></p>
+  <% end %>
+
+  <form method="post" action="<%= root_path %>enqueuer">
+    <%= csrf_tag %>
+    <input type="hidden" name="job_class_name" value="<%= h @job.name %>" />
+
+    <% if @job.params.any? %>
+      <p class="hint">
+        Blank fields use the method default. Values are converted:
+        <code>true</code>/<code>false</code>, <code>nil</code>, numbers like <code>42</code> or <code>1.5</code>,
+        and JSON such as <code>[1, 2]</code> or <code>{"a": 1}</code>.
+        Wrap a value in quotes, like <code>"123"</code>, to send it as text.
+      </p>
+    <% else %>
+      <p class="hint">This job takes no arguments.</p>
+    <% end %>
+
+    <% @job.params.each do |param| %>
+      <div class="field">
+        <label for="perform_<%= h param.name %>">
+          <%= h param.name %><span class="field-kind"><%= h(param.label || param.kind) %></span>
+        </label>
+        <input class="form-control" id="perform_<%= h param.name %>" name="perform[<%= h param.name %>]"
+               value="<%= h @values[param.name.to_s] %>" autocomplete="off" />
       </div>
+    <% end %>
 
-      <% @job.params.each do |param| %>
-        <div class="form-group">
-          <label for="perform[<%= param %>]"><%= param.name %>
-            <span style="color: red; font-size: small;">&nbsp;&nbsp;&nbsp;*<%= param.label %></span>
-          </label>
-          <input class="form-control" name="perform[<%= param.name %>]" />
+    <div class="actions">
+      <input type="submit" class="btn btn-danger" name="submit" value="Enqueue" />
+
+      <div class="schedule">
+        <div class="field">
+          <label for="enqueue_in">Or run in (seconds)</label>
+          <input class="form-control" id="enqueue_in" name="enqueue_in" value="<%= h @enqueue_in %>" placeholder="e.g. 3600" inputmode="numeric" autocomplete="off" />
         </div>
-      <% end %>
+        <input type="submit" class="btn" name="submit" value="Schedule" />
+      </div>
     </div>
-  </div>
-
-  <div class="form-group">
-    <input type="submit" class="btn btn-danger" name="submit" value="Enqueue" />
-  </div>
-
-  <div class="form-group">
-    <hr />
-  </div>
-
-  <div class="form-group">
-    <label for="enqueue_in">Enqueue in</label>
-    <input class="form-control" name="enqueue_in" placeholder="x seconds" />
-  </div>
-
-  <input type="submit" class="btn btn-danger" name="submit" value="Schedule" />
-</form>
+  </form>
+</section>

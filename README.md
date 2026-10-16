@@ -1,14 +1,17 @@
 # Sidekiq::Enqueuer &middot; [![version](https://badge.fury.io/gh/umbrellio%2Fsidekiq-enqueuer.svg)](https://badge.fury.io/gh/umbrellio%2Fsidekiq-enqueuer) ![build](https://github.com/umbrellio/sidekiq-enqueuer/workflows/build/badge.svg?branch=master) [![coverage](https://coveralls.io/repos/github/umbrellio/sidekiq-enqueuer/badge.svg?branch=master)](https://coveralls.io/github/umbrellio/sidekiq-enqueuer?branch=master)
 
-A Sidekiq Web extension to enqueue/schedule job in Web UI. Support both Sidekiq::Worker and ActiveJob.
+A Sidekiq Web extension to enqueue/schedule job in Web UI. Support both Sidekiq::Job and ActiveJob.
 Based on [richfisher's sidekiq-enqueuer](https://github.com/richfisher/sidekiq-enqueuer).
+
+This is a fork of [umbrellio/sidekiq-enqueuer](https://github.com/umbrellio/sidekiq-enqueuer) for Sidekiq 8 (8.0 and 8.1).
+See the [CHANGELOG](CHANGELOG.md) for what changed in 3.0.0.
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "sidekiq-enqueuer", github: "umbrellio/sidekiq-enqueuer"
+gem "sidekiq-enqueuer", github: "gschammah/sidekiq-enqueuer", branch: "sidekiq-8"
 ```
 
 And then execute:
@@ -53,6 +56,22 @@ end
 ```
 https://github.com/mperham/sidekiq/wiki/Active-Job#active-job-setup
 
+
+### Argument values
+Blank fields are left out so the method default applies. A blank positional field followed by a filled one is
+sent as `nil`, since positions cannot be skipped. Filled values are converted:
+
+| Input | Value |
+| --- | --- |
+| `nil`, `null` | `nil` |
+| `true`, `false` | `true`, `false` |
+| `42`, `-7` | Integer (no leading zeros: `024` stays a String) |
+| `1.5` | Float |
+| `[1, 2]`, `{"a": 1}`, `"123"` | parsed as JSON |
+| anything else | String |
+
+Keyword parameters are passed as kwargs to ActiveJob jobs. Sidekiq jobs cannot receive keyword arguments,
+so the form refuses them.
 
 ### Jobs action param mapping.
 This gem dynamically infers the params required in the `perform` or `perform_in` action in your Job / Worker.

@@ -11,7 +11,8 @@ module Sidekiq
                            Sidekiq::Extensions::DelayedMailer
                            Sidekiq::Extensions::DelayedClass
                            ApplicationJob
-                           ActiveJob::QueueAdapters::SidekiqAdapter::JobWrapper].freeze
+                           ActiveJob::QueueAdapters::SidekiqAdapter::JobWrapper
+                           Sidekiq::ActiveJob::Wrapper].freeze
 
       def initialize(async: true)
         @async = async
@@ -49,7 +50,7 @@ module Sidekiq
       def application_jobs
         rails_eager_load!
         jobs = [*sidekiq_jobs, *active_jobs].flatten
-        jobs.reject { |klass| IGNORED_CLASSES.include?(klass.to_s) }
+        jobs.reject { |klass| klass.name.nil? || IGNORED_CLASSES.include?(klass.name) }
       end
 
       def sidekiq_jobs

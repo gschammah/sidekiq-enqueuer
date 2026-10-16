@@ -1,115 +1,54 @@
 # frozen_string_literal: true
 
 RSpec.describe Sidekiq::Enqueuer::Worker::Trigger do
-  describe "#initializer" do
-    context "with job with sidekiq options" do
-      subject(:trigger) { described_class.new(WorkerWithDefinedQueue, []) }
+  before { Timecop.freeze(Time.at(0)) }
 
-      it "expects queue to be correctly setup" do
-        expect(trigger.queue).to eq("custom_queue")
-      end
+  context "with a Sidekiq job" do
+    it "enqueues to the job's queue and returns the jid" do
+      jid = described_class.new(WorkerWithDefinedQueue, []).enqueue
 
-      it "expects to have an empty arguments " do
-        expect(trigger.args_with_values).to be_empty
-      end
+      job = Sidekiq::Queue.new("custom_queue").first
+      expect(job.klass).to eq("WorkerWithDefinedQueue")
+      expect(job.jid).to eq(jid)
     end
 
-    context "with job without sidekiq options" do
-      subject(:trigger) { described_class.new(HardJob, %w[test test2]) }
+    it "schedules with args" do
+      jid = described_class.new(HardWorker, [1, "b"]).enqueue_in(120)
 
-      it "expects queue to be correctly setup" do
-        expect(trigger.queue).to eq("default")
-      end
-
-      it "expects to have an empty arguments " do
-        expect(trigger.args_with_values).to eq(%w[test test2])
-      end
+      job = Sidekiq::ScheduledSet.new.first
+      expect([job.klass, job.args, job.at.to_i, job.jid]).to eq(["HardWorker", [1, "b"], 120, jid])
     end
   end
 
-  describe "#enqueue" do
-    context "with a sidekiq job" do
-      subject(:trigger) { described_class.new(WorkerWithDefinedQueue, []) }
+  context "with an ActiveJob" do
+    it "enqueues with kwargs and returns the jid" do
+      jid = described_class.new(JobWithKeywordParams, ["AR"], { dry_run: true }).enqueue
 
-      before { expect(Sidekiq::Client).to receive(:enqueue_to).and_return(true) }
-
-      it "expects enqueue to be called" do
-        expect(trigger.enqueue).to be_truthy
-      end
+      job = Sidekiq::Queue.new("default").first
+      expect(job.display_class).to eq("JobWithKeywordParams")
+      expect(job.jid).to eq(jid)
+      expect(job.args.first["arguments"]).to eq(["AR", { "dry_run" => true, "_aj_ruby2_keywords" => ["dry_run"] }])
     end
 
-    context "with an ActiveJob" do
-      subject(:trigger) { described_class.new(HardJob, []) }
+    it "schedules" do
+      described_class.new(HardJob, ["a", "b"]).enqueue_in(60)
 
-      before { expect(HardJob).to receive(:perform_later).and_return(true) }
-
-      it "returns true" do
-        expect(trigger.enqueue).to be_truthy
-      end
+      expect(Sidekiq::ScheduledSet.new.first.at.to_i).to eq(60)
     end
 
-    context "with unknown job type" do
-      subject(:trigger) { described_class.new(Class.new, []) }
-
-      it "raises corresponding error" do
-        expect { trigger.enqueue }.to raise_error(described_class::UnsupportedJobType)
+    it "returns nil when enqueuing is aborted" do
+      job_class = Class.new(HardJob) do
+        def self.name = "AbortedJob"
+        before_enqueue { throw :abort }
       end
+
+      expect(described_class.new(job_class, ["a", "b"]).enqueue).to be_nil
+      expect(Sidekiq::Queue.new("default").size).to eq(0)
     end
   end
 
-  describe "#enqueue_in" do
-    context "with a sidekiq job" do
-      subject(:trigger) { described_class.new(WorkerWithDefinedQueue, %w[test test2]) }
-
-      before { expect(Sidekiq::Client).to receive(:enqueue_to_in).and_return(true) }
-
-      it "expects enqueue to be called" do
-        expect(trigger.enqueue_in(1)).to be_truthy
-      end
-    end
-
-    context "with an ActiveJob" do
-      subject(:trigger) { described_class.new(HardJob, []) }
-
-      before { expect(HardJob).to receive_message_chain(:set, :perform_later).and_return(true) }
-
-      it "expects enqueue to be called" do
-        expect(trigger.enqueue_in(1)).to be_truthy
-      end
-    end
-
-    context "with unknown job type" do
-      subject(:trigger) { described_class.new(Class.new, []) }
-
-      it "raises corresponding error" do
-        expect { trigger.enqueue_in(1) }.to raise_error(described_class::UnsupportedJobType)
-      end
-    end
-  end
-
-  describe "#deduce_queue" do
-    context "with job with sidekiq options" do
-      subject(:trigger) { described_class.new(WorkerWithDefinedQueue, []) }
-
-      it "expects queue to be correctly setup" do
-        expect(trigger.send(:deduce_queue)).to eq("custom_queue")
-      end
-    end
-
-    context "with job without sidekiq options" do
-      subject(:trigger) { described_class.new(HardJob, %w[test test2]) }
-
-      it "expects queue to be correctly setup" do
-        expect(trigger.send(:deduce_queue)).to eq("default")
-      end
-    end
-  end
-
-  describe "#sidekiq_job?" do
-    subject(:trigger) { described_class.new(WorkerWithDefinedQueue, []) }
-
-    it "expects return true when Sidekiq::Worker is configured" do
-      expect(trigger.send(:sidekiq_job?)).to be_truthy
-    end
+  it "rejects other classes" do
+    expect { described_class.new(String, []).enqueue }.to raise_error(described_class::UnsupportedJobType)
+    expect { described_class.new(String, []).enqueue_in(1) }.to raise_error(described_class::UnsupportedJobType)
   end
 end

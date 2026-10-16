@@ -1,24 +1,30 @@
-<h3>Enqueuer</h3>
+<section>
+  <header>
+    <h1>Enqueuer</h1>
+  </header>
 
-<table class="table table-hover table-bordered table-striped table-white">
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Params</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    <% @jobs.each do |job| %>
-      <tr>
-        <td width="40%"><%= job.name %></td>
-        <td width="40%"><%= job.params.map(&:name).join(', ') %></td>
-        <td width="20%">
-          <a class="btn btn-danger btn-xs" href="<%= root_path %>enqueuer/<%= job.name %>" style="color: white;">
-            Enqueue
-          </a>
-        </td>
-      </tr>
-    <% end %>
-  </tbody>
-</table>
+  <div class="table_container">
+    <table class="table table-hover table-bordered table-striped table-white">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Params</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @jobs.each do |job| %>
+          <tr>
+            <td width="40%"><%= h job.name %></td>
+            <td width="40%">
+              <%= h job.params.map { |param| param.keyword? ? "#{param.name}:" : param.name.to_s }.join(", ") %>
+            </td>
+            <td width="20%">
+              <a class="btn btn-danger btn-xs" href="<%= root_path %>enqueuer/<%= h job.name %>">Enqueue</a>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+</section>
