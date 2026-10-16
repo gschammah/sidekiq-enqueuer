@@ -5,13 +5,14 @@ Based on [richfisher's sidekiq-enqueuer](https://github.com/richfisher/sidekiq-e
 
 This is a fork of [umbrellio/sidekiq-enqueuer](https://github.com/umbrellio/sidekiq-enqueuer) for Sidekiq 8 (8.0 and 8.1).
 See the [CHANGELOG](CHANGELOG.md) for what changed in 3.0.0.
+For Sidekiq 7, use the `sidekiq-7` branch (2.2.1, without the 3.0.0 changes).
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
 ```ruby
-gem "sidekiq-enqueuer", github: "gschammah/sidekiq-enqueuer", branch: "sidekiq-8"
+gem "sidekiq-enqueuer", github: "gschammah/sidekiq-enqueuer"
 ```
 
 And then execute:
