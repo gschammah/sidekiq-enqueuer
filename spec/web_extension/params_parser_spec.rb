@@ -1,61 +1,68 @@
 # frozen_string_literal: true
 
 RSpec.describe Sidekiq::Enqueuer::WebExtension::ParamsParser do
-  let(:parser) { described_class.new(params, worker) }
-  let(:worker) do
-    Sidekiq::Enqueuer::Worker::Instance.new(WorkerWithOptionalParams, async: false)
+  subject(:result) { described_class.new(params, worker).process }
+
+  let(:worker) { Sidekiq::Enqueuer::Worker::Instance.new(WorkerWithOptionalParams, async: false) }
+
+  context "with typed values" do
+    let(:params) { { "required_param" => "42", "optional_param" => "1.5", "optional_param2" => "true" } }
+
+    it { expect(result.args).to eq([42, 1.5, true]) }
   end
 
-  describe "#initializer" do
-    subject(:parsed_params) { parser.raw_params }
+  context "with false, nil, JSON and quoted text" do
+    let(:params) { { "required_param" => "false", "optional_param" => "nil", "optional_param2" => '[1, {"a": 2}]' } }
 
-    let(:parser) { described_class.new(params, worker) }
-    let(:params) { Hash["userId" => "value"] }
+    it { expect(result.args).to eq([false, nil, [1, { "a" => 2 }]]) }
+  end
 
-    it "expects a correct name assignment" do
-      expect(parsed_params).to be_an_instance_of(Hash)
-      expect(parsed_params).to eq("userId" => "value")
+  context "with text that only looks numeric" do
+    let(:params) { { "required_param" => "024", "optional_param" => '"123"', "optional_param2" => "AR" } }
+
+    it { expect(result.args).to eq(["024", "123", "AR"]) }
+  end
+
+  context "with trailing blanks" do
+    let(:params) { { "required_param" => "x", "optional_param" => " ", "optional_param2" => "" } }
+
+    it "leaves them out so method defaults apply" do
+      expect(result.args).to eq(["x"])
     end
   end
 
-  describe "#process" do
-    subject(:process_result) { parser.process }
+  context "with a blank before a filled value" do
+    let(:params) { { "required_param" => "x", "optional_param" => "", "optional_param2" => "y" } }
 
-    context "with only string parameters" do
-      let(:params) do
-        { "required_param" => "valueParamUserId", "optional_param" => "valueTesting" }
-      end
+    it { expect(result.args).to eq(["x", nil, "y"]) }
+  end
 
-      it "with params to return an array of values" do
-        expect(process_result).to be_an_instance_of(Array)
-        expect(process_result).to eq(["valueParamUserId", "valueTesting", nil])
-      end
+  context "with keyword params" do
+    let(:worker) { Sidekiq::Enqueuer::Worker::Instance.new(JobWithKeywordParams, async: false) }
+    let(:params) { { "country" => "AR", "max_created_at" => "", "dry_run" => "true" } }
+
+    it "returns kwargs and leaves blank keywords out" do
+      expect(result.args).to eq(["AR"])
+      expect(result.kwargs).to eq(dry_run: true)
     end
+  end
 
-    context "with the first parameter as a hash and a second as string" do
-      let(:params) { Hash["required_param" => "value1", "optional_param" => "valueTesting"] }
+  context "with a missing required param" do
+    let(:params) { { "required_param" => "" } }
 
-      it "parses params to return an array of values" do
-        expect(process_result).to be_an_instance_of(Array)
-        expect(process_result).to eq(["value1", "valueTesting", nil])
-      end
-    end
+    it { expect { result }.to raise_error(described_class::Error, "required_param is required") }
+  end
 
-    context "with empty values" do
-      let(:params) { Hash["required_param" => "testing", "optional_param" => ""] }
+  context "with invalid JSON" do
+    let(:params) { { "required_param" => "[1," } }
 
-      it "parses params to return an array of values" do
-        expect(process_result).to be_an_instance_of(Array)
-        expect(process_result).to eq(["testing", nil, nil])
-      end
-    end
+    it { expect { result }.to raise_error(described_class::Error, /required_param is not valid JSON/) }
+  end
 
-    context "with no value for required fields" do
-      let(:params) { Hash["required_param" => "", "optional_param" => ""] }
+  context "with non-hash params" do
+    let(:worker) { Sidekiq::Enqueuer::Worker::Instance.new(NoParamWorker, async: false) }
+    let(:params) { nil }
 
-      it "parses params and raises an error" do
-        expect { process_result }.to raise_error(described_class::NoProvidedValueForRequiredParam)
-      end
-    end
+    it { expect(result.args).to eq([]) }
   end
 end

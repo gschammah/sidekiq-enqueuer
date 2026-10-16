@@ -27,11 +27,23 @@ RSpec.describe Sidekiq::Enqueuer::Configuration do
     end
 
     context "without provided jobs" do
+      # include, not match_array: other specs define job classes at runtime too.
       it "queries active job and sidekiq jobs" do
-        expect(available_jobs).to match_array([
+        expect(available_jobs).to include(*[
           NoParamWorker, HardWorker, HardJob, WorkerWithPerformAsync, WorkerWithNoParams,
-          WorkerWithKeyValueParams, WorkerWithOptionalParams, WorkerWithDefinedQueue
+          WorkerWithKeyValueParams, WorkerWithOptionalParams, WorkerWithDefinedQueue,
+          JobWithKeywordParams, WorkerWithSplat
         ])
+        expect(available_jobs).not_to include(ActiveJob::Base)
+      end
+    end
+
+    context "with anonymous job classes loaded" do
+      it "skips them instead of failing to sort" do
+        anonymous = Class.new { include Sidekiq::Job }
+
+        expect { available_jobs }.not_to raise_error
+        expect(available_jobs).not_to include(anonymous)
       end
     end
   end

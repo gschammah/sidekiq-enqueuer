@@ -32,7 +32,13 @@ module Sidekiq
 end
 
 if defined?(Sidekiq::Web)
-  Sidekiq::Web.register Sidekiq::Enqueuer::WebExtension::Loader
-  Sidekiq::Web.tabs["Enqueuer"] = "enqueuer"
-  Sidekiq::Web.settings.locales << File.join(File.dirname(__FILE__), "enqueuer/locales")
+  Sidekiq::Web.configure do |config|
+    config.locales << File.join(File.dirname(__FILE__), "enqueuer/locales")
+    config.register(
+      Sidekiq::Enqueuer::WebExtension::Loader,
+      name: "enqueuer",
+      tab: "Enqueuer",
+      index: "enqueuer"
+    )
+  end
 end

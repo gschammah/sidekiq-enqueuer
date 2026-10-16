@@ -6,20 +6,21 @@ module Sidekiq
       class Trigger
         class UnsupportedJobType < StandardError; end
 
-        attr_reader :job, :queue, :args_with_values
+        attr_reader :job, :queue, :args, :kwargs
 
-        def initialize(job, input_param_hash)
+        def initialize(job, args, kwargs = {})
           @job = job
           @queue = deduce_queue
-          @args_with_values = input_param_hash
+          @args = args
+          @kwargs = kwargs
         end
 
         def enqueue
           case
           when sidekiq_job?
-            Sidekiq::Client.enqueue_to(queue, job, *args_with_values)
+            Sidekiq::Client.enqueue_to(queue, job, *args)
           when active_job?
-            job.perform_later(*args_with_values)
+            jid_of(job.perform_later(*args, **kwargs))
           else
             raise UnsupportedJobType, "Unsupported job type: #{job}"
           end
@@ -28,9 +29,9 @@ module Sidekiq
         def enqueue_in(time_in_seconds)
           case
           when sidekiq_job?
-            Sidekiq::Client.enqueue_to_in(queue, time_in_seconds, job, *args_with_values)
+            Sidekiq::Client.enqueue_to_in(queue, time_in_seconds, job, *args)
           when active_job?
-            job.set(wait: time_in_seconds).perform_later(*args_with_values)
+            jid_of(job.set(wait: time_in_seconds).perform_later(*args, **kwargs))
           else
             raise UnsupportedJobType, "Unsupported job type: #{job}"
           end
@@ -38,8 +39,16 @@ module Sidekiq
 
         private
 
+        # perform_later returns false when enqueuing was aborted (e.g. a unique job
+        # that is already queued).
+        def jid_of(active_job)
+          return unless active_job && active_job.successfully_enqueued? != false
+
+          active_job.provider_job_id || active_job.job_id
+        end
+
         def deduce_queue
-          job.respond_to?(:sidekiq_options) ? job.sidekiq_options["queue"].to_s : "default"
+          job.respond_to?(:get_sidekiq_options) ? job.get_sidekiq_options["queue"].to_s : "default"
         end
 
         def sidekiq_job?

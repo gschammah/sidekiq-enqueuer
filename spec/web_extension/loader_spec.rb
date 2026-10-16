@@ -3,124 +3,115 @@
 RSpec.describe Sidekiq::Enqueuer::WebExtension::Loader do
   include_context "web extension api context"
 
-  before { Timecop.freeze("1970-01-01 00:00:00") }
-
-  before do
-    Sidekiq.redis = REDIS
-    Sidekiq.redis(&:flushdb)
-  end
-
   before do
     Sidekiq::Enqueuer.configure do |config|
-      config.jobs = %w[NoParamWorker HardWorker HardJob]
-    end
-  end
-
-  describe "GET /" do
-    it "can display home with enqueuer tab" do
-      get "/"
-
-      expect(last_response).to be_successful
-      expect(last_response.body).to include("Sidekiq", "Enqueuer")
+      config.jobs = %w[NoParamWorker HardWorker HardJob JobWithKeywordParams WorkerWithKeyValueParams]
     end
   end
 
   describe "GET /enqueuer" do
-    context "with a supported Worker class" do
-      it "can display Enqueuer with HardWorker" do
-        get "/enqueuer"
+    it "shows the tab and lists jobs with their params" do
+      get "/enqueuer"
 
-        expect(last_response).to be_successful
-        expect(last_response.body).to include("HardWorker", "NoParamWorker", "HardJob")
-      end
+      expect(last_response).to be_successful
+      expect(last_response.body).to include("Enqueuer", "HardWorker", "param1, param2")
+      expect(last_response.body).to include("country, max_created_at:, dry_run:")
+    end
+  end
 
-      it "can display HardWorker form" do
-        get "/enqueuer/HardWorker"
+  describe "GET /enqueuer/:job_class_name" do
+    it "shows the form" do
+      get "/enqueuer/HardJob"
 
-        expect(last_response).to be_successful
-        expect(last_response.body).to include("HardWorker", "param1", "param2")
-      end
+      expect(last_response).to be_successful
+      expect(last_response.body).to include("Enqueue HardJob", 'name="perform[param1]"')
     end
 
-    context "given an unsupported Worker class" do
-      it "can display Enqueuer with HardJob" do
-        get "/enqueuer"
+    it "warns about jobs it cannot enqueue" do
+      get "/enqueuer/WorkerWithKeyValueParams"
 
-        expect(last_response).to be_successful
-        expect(last_response.body).to include("HardJob")
-      end
+      expect(last_response.body).to include('<p class="error">', "Sidekiq cannot pass")
+    end
 
-      it "can display HardJob form" do
-        get "/enqueuer/HardJob"
+    it "returns 404 for unknown jobs" do
+      get "/enqueuer/Nope"
 
-        expect(last_response).to be_successful
-        expect(last_response.body).to include("HardJob", "param1", "param2")
-      end
+      expect(last_response.status).to eq(404)
     end
   end
 
   describe "POST /enqueuer" do
-    context "providing valid parameters" do
-      it "post form, enqueue a HardWorker" do
-        default_queue = Sidekiq::Queue.new
+    it "enqueues a Sidekiq job with typed args" do
+      post_form("HardWorker", perform: { "param1" => "v1", "param2" => "2" })
 
-        post "/enqueuer", job_class_name: "HardWorker",
-                          perform: { param1: "v1", param2: "v2" },
-                          submit: "Enqueue"
-
-        expect(last_response).to be_redirect
-        expect(default_queue.size).to eq(1)
-        expect(default_queue.first.klass).to eq("HardWorker")
-        expect(default_queue.first.args).to eq(%w[v1 v2])
-      end
-
-      it "post form, enqueue a HardJob" do
-        default_queue = Sidekiq::Queue.new(:default)
-
-        post "/enqueuer", job_class_name: "HardJob",
-                          perform: { param1: "v1", param2: "v2" },
-                          submit: "Enqueue"
-
-        expect(last_response).to be_redirect
-        expect(default_queue.size).to eq(1)
-        expect(default_queue.first.klass).to eq(
-          "ActiveJob::QueueAdapters::SidekiqAdapter::JobWrapper",
-        )
-        expect(default_queue.first.args.first["job_class"]).to eq("HardJob")
-        expect(default_queue.first.args.first["arguments"]).to eq(%w[v1 v2])
-      end
+      expect(last_response).to be_redirect
+      job = Sidekiq::Queue.new.first
+      expect([job.klass, job.args]).to eq(["HardWorker", ["v1", 2]])
+      expect(flash_message).to match(/HardWorker enqueued with \(&quot;v1&quot;, 2\) \(jid \h+\)/)
     end
 
-    context "post form, schedule jobs to the future" do
-      it "post form, schedule a HardWorker" do
-        ss = Sidekiq::ScheduledSet.new
+    it "enqueues an ActiveJob with kwargs" do
+      post_form("JobWithKeywordParams", perform: { "country" => "AR", "dry_run" => "true" })
 
-        post "/enqueuer", job_class_name: "HardWorker",
-                          perform: { param1: "v1", param2: "v2" },
-                          enqueue_in: 120,
-                          submit: "Schedule"
+      expect(Sidekiq::Queue.new.first.display_class).to eq("JobWithKeywordParams")
+      expect(flash_message).to include("JobWithKeywordParams enqueued with (&quot;AR&quot;, dry_run: true)")
+    end
 
-        expect(last_response).to be_redirect
-        expect(ss.size).to eq(1)
-        expect(ss.first.klass).to eq("HardWorker")
-        expect(ss.first.args).to eq(%w[v1 v2])
-        expect(ss.first.at).to eq(120.seconds.from_now)
-      end
+    it "schedules a job" do
+      Timecop.freeze(Time.at(0))
+      post_form("HardJob", perform: { "param1" => "a", "param2" => "b" }, submit: "Schedule", enqueue_in: "120")
 
-      it "post form, schedule a HardJob" do
-        ss = Sidekiq::ScheduledSet.new
+      expect(Sidekiq::ScheduledSet.new.first.at.to_i).to eq(120)
+      expect(flash_message).to include("HardJob enqueued to run in 120s")
+    end
 
-        post "/enqueuer", job_class_name: "HardJob",
-                          perform: { param1: "v1", param2: "v2" },
-                          enqueue_in: 120,
-                          submit: "Schedule"
+    it "re-renders the form with the error and the input" do
+      post_form("HardWorker", perform: { "param1" => "", "param2" => "keep me" })
 
-        expect(last_response).to be_redirect
-        expect(ss.size).to eq(1)
-        expect(ss.first.klass).to eq("ActiveJob::QueueAdapters::SidekiqAdapter::JobWrapper")
-        expect(ss.first.args.first["arguments"]).to eq(%w[v1 v2])
-        expect(ss.first.at).to eq(120.seconds.from_now)
-      end
+      expect(last_response).to be_successful
+      expect(last_response.body).to include('<p class="error">param1 is required</p>', 'value="keep me"')
+      expect(Sidekiq::Queue.new.size).to eq(0)
+    end
+
+    it "requires a positive delay to schedule" do
+      post_form("NoParamWorker", submit: "Schedule", enqueue_in: "")
+
+      expect(last_response.body).to include("whole number of seconds greater than 0")
+      expect(Sidekiq::ScheduledSet.new.size).to eq(0)
+    end
+
+    it "rejects unknown actions" do
+      post_form("NoParamWorker", submit: "Explode")
+
+      expect(last_response.body).to include("Unknown action: Explode")
+    end
+
+    it "refuses jobs it cannot enqueue" do
+      post_form("WorkerWithKeyValueParams", perform: { "required_param" => "x" })
+
+      expect(last_response.body).to include("Sidekiq cannot pass")
+      expect(Sidekiq::Queue.new.size).to eq(0)
+    end
+
+    it "says when a job was not enqueued" do
+      allow(Sidekiq::Client).to receive(:enqueue_to).and_return(nil)
+      post_form("NoParamWorker")
+
+      expect(flash_message).to include("NoParamWorker was not enqueued")
+    end
+
+    it "escapes input in the flash" do
+      post_form("HardWorker", perform: { "param1" => "<script>", "param2" => "x" })
+
+      flash = flash_message
+      expect(flash).to include("&lt;script&gt;")
+      expect(flash).not_to include("<script>")
+    end
+
+    it "returns 404 for unknown jobs" do
+      post "/enqueuer", "authenticity_token" => csrf_token, "job_class_name" => "Nope"
+
+      expect(last_response.status).to eq(404)
     end
   end
 end

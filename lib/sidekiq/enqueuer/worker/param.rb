@@ -4,22 +4,38 @@ module Sidekiq
   module Enqueuer
     module Worker
       class Param
-        attr_reader :name, :label
-        attr_accessor :value
+        KINDS = {
+          req: "required",
+          opt: "optional",
+          keyreq: "required keyword",
+          key: "optional keyword"
+        }.freeze
 
-        VALID_OPTIONS = { req: "required", opt: "optional" }.freeze
+        attr_reader :name, :kind
 
-        def initialize(name, label)
+        def initialize(name, kind)
           @name = name
-          @label = VALID_OPTIONS[label]
+          @kind = kind
+        end
+
+        def label
+          KINDS[kind]
+        end
+
+        def supported?
+          KINDS.key?(kind)
         end
 
         def required?
-          label == VALID_OPTIONS[:req]
+          kind == :req || kind == :keyreq
         end
 
         def optional?
           !required?
+        end
+
+        def keyword?
+          kind == :key || kind == :keyreq
         end
       end
     end

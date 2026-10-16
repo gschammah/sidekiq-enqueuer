@@ -4,16 +4,15 @@ module Sidekiq
   module Enqueuer
     module WebExtension
       module Helper
-        def get_params_by_action(name, job)
-          return [] if params[name].nil?
+        def find_job_by_class_name(job_class_name)
+          return if job_class_name.nil? || job_class_name.empty?
 
-          Sidekiq::Enqueuer::WebExtension::ParamsParser.new(params[name], job).process
+          Sidekiq::Enqueuer.jobs.find { |job| job.name == job_class_name }
         end
 
-        def find_job_by_class_name(job_class_name)
-          Sidekiq::Enqueuer.jobs.find do |job_klass|
-            [job_klass.job, job_klass.job.to_s, job_klass.name].include?(job_class_name)
-          end
+        def describe_args(parsed)
+          parts = parsed.args.map(&:inspect) + parsed.kwargs.map { |key, value| "#{key}: #{value.inspect}" }
+          parts.empty? ? "no arguments" : "(#{parts.join(", ")})"
         end
       end
     end

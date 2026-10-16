@@ -20,10 +20,10 @@ SimpleCov.configure do
     SimpleCov::Formatter::LcovFormatter,
   ])
 
-  add_group "Worker", "/lib/enqueuer/worker"
-  add_group "WebExtension", "/lib/enqueuer/web_extension"
+  group "Worker", "/lib/enqueuer/worker"
+  group "WebExtension", "/lib/enqueuer/web_extension"
 
-  add_filter "/lib/sidekiq/enqueuer/views/"
-  add_filter "/lib/sidekiq/enqueuer/locales/"
-  add_filter "/spec/"
+  skip "/lib/sidekiq/enqueuer/views/"
+  skip "/lib/sidekiq/enqueuer/locales/"
+  skip "/spec/"
 end

@@ -1,74 +1,26 @@
 # frozen_string_literal: true
 
-class TestHelperClass
-  include Sidekiq::Enqueuer::WebExtension::Helper
-
-  def params
-    {
-      "post" => {
-        "required_param" => "value1",
-        "optional_param" => "testing",
-        "optional_param2" => "testing2",
-      },
-    }
-  end
-end
-
 RSpec.describe Sidekiq::Enqueuer::WebExtension::Helper do
-  let(:helper) { TestHelperClass.new }
-  let(:worker) do
-    Sidekiq::Enqueuer::Worker::Instance.new(WorkerWithOptionalParams, async: false)
-  end
+  let(:helper) { Class.new { include Sidekiq::Enqueuer::WebExtension::Helper }.new }
 
-  describe "#get_params_by_action" do
-    context "with valid params for the required action" do
-      subject(:params) { helper.get_params_by_action("post", worker) }
-
-      it "returns a list of values passed as parameters" do
-        expect(params).to eq(%w[value1 testing testing2])
-      end
-    end
-
-    context "providing invalid action params" do
-      subject(:params) { helper.get_params_by_action("none", worker) }
-
-      it "returns empty list since there is no 'none' param" do
-        expect(params).to be_empty
-      end
-    end
-  end
+  before { Sidekiq::Enqueuer.configure { |config| config.jobs = %w[NoParamWorker HardWorker] } }
 
   describe "#find_job_by_class_name" do
-    before do
-      Sidekiq::Enqueuer.configure do |config|
-        config.jobs = %w[NoParamWorker HardWorker]
-      end
+    it "finds configured jobs by name" do
+      expect(helper.find_job_by_class_name("HardWorker").name).to eq("HardWorker")
     end
 
-    context "providing a valid job name" do
-      subject(:job) { helper.find_job_by_class_name("HardWorker") }
-
-      it "returns the single instance of the job to use" do
-        expect(job).to be_an_instance_of(Sidekiq::Enqueuer::Worker::Instance)
-        expect(job.name).to eq("HardWorker")
-      end
+    it "returns nil for unknown or blank names" do
+      expect(helper.find_job_by_class_name("TestingWorker")).to be_nil
+      expect(helper.find_job_by_class_name("")).to be_nil
+      expect(helper.find_job_by_class_name(nil)).to be_nil
     end
+  end
 
-    context "providing a valid job" do
-      subject(:job) { helper.find_job_by_class_name(HardWorker) }
+  describe "#describe_args" do
+    def parsed(args, kwargs = {}) = Sidekiq::Enqueuer::WebExtension::ParamsParser::Result.new(args, kwargs)
 
-      it "returns the single instance of the job to use" do
-        expect(job).to be_an_instance_of(Sidekiq::Enqueuer::Worker::Instance)
-        expect(job.name).to eq("HardWorker")
-      end
-    end
-
-    context "providing an invalid job name" do
-      subject(:job) { helper.find_job_by_class_name("TestingWorker") }
-
-      it "returns nil since there is no such job" do
-        expect(job).to be_nil
-      end
-    end
+    it { expect(helper.describe_args(parsed([]))).to eq("no arguments") }
+    it { expect(helper.describe_args(parsed(["AR", 1], { dry_run: true }))).to eq('("AR", 1, dry_run: true)') }
   end
 end

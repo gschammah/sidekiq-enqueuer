@@ -4,25 +4,27 @@ require_relative "./setup_simplecov"
 
 SimpleCov.start
 
-require "active_job"
+# Sidekiq::Web reads its locale files with the default encoding.
+Encoding.default_external = Encoding::UTF_8
+
 require "bundler/setup"
-require "pry"
+require "active_job"
+require "rack/session"
 require "rack/test"
 require "sidekiq"
 require "sidekiq/api"
-require "sidekiq/enqueuer"
 require "sidekiq/web"
-require "simplecov"
+require "sidekiq/enqueuer"
 require "timecop"
 
-ENV["RACK_ENV"] = "test" # skip Rack Protection
-REDIS = Sidekiq::RedisConnection.create(url: "redis://localhost/15")
+Sidekiq.configure_client do |config|
+  config.redis = { url: ENV.fetch("REDIS_URL", "redis://localhost:6379/15") }
+end
 Sidekiq.logger.level = Logger::ERROR
 
 ActiveJob::Base.queue_adapter = :sidekiq
-ActiveJob::Base.logger.level = Logger::ERROR
+ActiveJob::Base.logger = Logger.new(nil)
 
-Dir["#{__dir__}/../lib/sidekiq/**/*.rb"].sort.each { |x| require x }
 Dir["#{__dir__}/support/**/*.rb"].sort.each { |x| require x }
 
 RSpec.configure do |config|
@@ -34,4 +36,7 @@ RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
+
+  config.before { Sidekiq.redis(&:flushdb) }
+  config.after { Timecop.return }
 end
